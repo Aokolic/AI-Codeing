@@ -1,0 +1,46 @@
+"""DataFeed Pydantic schemas."""
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel, Field
+
+from app.models.data_feed import FeedStatus, FeedType
+
+
+class DataFeedOut(BaseModel):
+    id: str
+    name: str
+    feed_type: FeedType
+    url: str
+    status: FeedStatus
+    consecutive_failures: int
+    last_collected_at: Optional[datetime] = None
+    schedule_cron: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DataFeedCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    feed_type: FeedType
+    url: str = Field(..., min_length=10)
+    schedule_cron: str = Field("0 2 * * *")
+    parse_config: Optional[Dict[str, Any]] = None
+
+
+class DataFeedUpdate(BaseModel):
+    name: Optional[str] = None
+    url: Optional[str] = None
+    schedule_cron: Optional[str] = None
+    status: Optional[FeedStatus] = None
+    parse_config: Optional[Dict[str, Any]] = None
+
+
+class CollectTriggerResponse(BaseModel):
+    message: str
+    feed_id: str
+    triggered_at: datetime
+    status: str = "running"
