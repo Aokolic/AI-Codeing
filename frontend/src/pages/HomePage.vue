@@ -1,42 +1,35 @@
 <template>
     <div class="home-page">
-        <!-- Hero -->
-        <div class="hero-section">
-            <div class="hero-badge">⚡ 实时信息甄别系统</div>
-            <h1 class="hero-title">追踪信息，揭示真相</h1>
-            <p class="hero-sub">聚合多方来源 · 时间线追踪 · 三维可信度评估</p>
-            <search-bar class="hero-search" @search="handleSearch" />
-            <div class="hero-stats">
-                <span class="hstat">📋 {{ total }} 个追踪案例</span>
-                <span class="hstat-sep">·</span>
-                <span class="hstat">🏷 {{ tags.length }} 个分类</span>
+        <!-- Tab navigation -->
+        <div class="tab-nav">
+            <button class="tab-btn" :class="{ active: activeTab === 'hot' }" @click="activeTab = 'hot'">热点</button>
+            <button class="tab-btn" :class="{ active: activeTab === 'track' }" @click="activeTab = 'track'">跟踪</button>
+        </div>
+
+        <!-- Featured cases (top hot cases as large cards) -->
+        <div v-if="activeTab === 'hot' && featuredCases.length" class="featured-section">
+            <div class="featured-grid">
+                <router-link v-for="c in featuredCases" :key="c.id" :to="`/cases/${c.id}`" class="featured-card">
+                    <div class="featured-overlay">
+                        <span class="featured-time">{{ fromNow(c.created_at) }}</span>
+                        <span class="featured-count">{{ c.event_count }}</span>
+                    </div>
+                    <h3 class="featured-title">{{ c.title }}</h3>
+                </router-link>
             </div>
         </div>
 
-        <!-- Tag filter -->
-        <div class="tag-filter">
-            <button class="tag-pill" :class="{ active: selectedTagId === null }"
-                @click="selectedTagId = null">全部</button>
-            <button v-for="tag in tags" :key="tag.id" class="tag-pill" :class="{ active: selectedTagId === tag.id }"
-                @click="selectedTagId = tag.id">
-                {{ tag.name }} <span class="tag-count">{{ tag.case_count }}</span>
-            </button>
-        </div>
-
-        <!-- Hot cases grid -->
-        <div v-if="loading" class="cases-grid">
-            <div v-for="i in 6" :key="i" class="skeleton-card">
-                <div class="skel-bar"></div>
-                <div class="skel-body">
-                    <div class="skel-title shimmer"></div>
-                    <div class="skel-meta shimmer"></div>
-                    <div class="skel-tags shimmer"></div>
-                </div>
+        <!-- Case list -->
+        <div v-if="loading" class="cases-loading">
+            <div v-for="i in 4" :key="i" class="skeleton-item">
+                <div class="skel-title shimmer"></div>
+                <div class="skel-desc shimmer"></div>
+                <div class="skel-meta shimmer"></div>
             </div>
         </div>
-        <n-empty v-else-if="!filteredCases.length" description="暂无相关案例" />
-        <div v-else class="cases-grid">
-            <case-card v-for="c in filteredCases" :key="c.id" :case="c" />
+        <n-empty v-else-if="!displayCases.length" description="暂无相关案例" />
+        <div v-else class="case-list">
+            <case-card v-for="c in displayCases" :key="c.id" :case="c" />
         </div>
 
         <!-- Pagination -->
@@ -47,29 +40,42 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NEmpty, NPagination } from 'naive-ui'
-import SearchBar from '@/components/SearchBar.vue'
 import CaseCard from '@/components/CaseCard.vue'
-import { listCases, listTags } from '@/api/cases'
-import type { CaseSummary, TagWithCount } from '@/types'
+import { listCases } from '@/api/cases'
+import type { CaseSummary } from '@/types'
+import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import 'dayjs/locale/zh-cn'
+
+dayjs.extend(relativeTime)
+dayjs.locale('zh-cn')
 
 const router = useRouter()
 const cases = ref<CaseSummary[]>([])
-const tags = ref<TagWithCount[]>([])
 const loading = ref(false)
-const selectedTagId = ref<string | null>(null)
+const activeTab = ref<'hot' | 'track'>('hot')
 const page = ref(1)
 const pageSize = 12
 const total = ref(0)
 const pageCount = computed(() => Math.ceil(total.value / pageSize))
 
-const filteredCases = computed(() =>
-    selectedTagId.value
-        ? cases.value.filter((c) => c.tags?.some((t) => t.id === selectedTagId.value))
-        : cases.value,
-)
+// Top 3 hot cases as featured cards
+const featuredCases = computed(() => cases.value.slice(0, 3))
+
+// Remaining cases for list view
+const displayCases = computed(() => {
+    if (activeTab.value === 'hot') {
+        return cases.value.slice(3)
+    }
+    return cases.value.filter(c => c.status === 'active')
+})
+
+function fromNow(dateStr: string) {
+    return dayjs(dateStr).fromNow()
+}
 
 async function loadCases() {
     loading.value = true
@@ -82,202 +88,179 @@ async function loadCases() {
     }
 }
 
-async function loadTags() {
-    try {
-        tags.value = await listTags()
-    } catch { /* non-critical */ }
-}
-
 function handleSearch(q: string) {
     router.push({ path: '/search', query: { q } })
 }
 
-watch(selectedTagId, () => { page.value = 1 })
-
 onMounted(() => {
     loadCases()
-    loadTags()
 })
 </script>
 
 <style scoped>
 .home-page {
-    max-width: 1100px;
+    max-width: 960px;
     margin: 0 auto;
 }
 
-/* Hero */
-.hero-section {
-    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%);
-    margin: -28px -24px 0;
-    padding: 56px 40px 44px;
-    text-align: center;
+/* Tab navigation */
+.tab-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 24px;
+}
+
+.tab-btn {
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: 500;
+    color: #9ca3af;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    color: #374151;
+}
+
+.tab-btn.active {
+    color: #ef4444;
+    border-bottom-color: #ef4444;
+    font-weight: 600;
+}
+
+/* Featured section */
+.featured-section {
+    margin-bottom: 32px;
+}
+
+.featured-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.featured-card {
     position: relative;
+    background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+    border-radius: 12px;
+    padding: 0;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
     overflow: hidden;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.hero-section::before {
-    content: '';
+.featured-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+.featured-overlay {
     position: absolute;
-    inset: 0;
-    background: radial-gradient(ellipse 80% 60% at 50% 100%, rgba(99, 102, 241, .25) 0%, transparent 70%);
-    pointer-events: none;
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
 }
 
-.hero-badge {
-    display: inline-block;
-    background: rgba(99, 102, 241, .2);
-    border: 1px solid rgba(129, 140, 248, .3);
-    color: #a5b4fc;
+.featured-time {
+    background: #ef4444;
+    color: #fff;
     font-size: 12px;
     font-weight: 600;
-    padding: 4px 14px;
-    border-radius: 999px;
-    letter-spacing: 0.05em;
-    margin-bottom: 16px;
+    padding: 3px 10px;
+    border-radius: 4px;
 }
 
-.hero-title {
-    font-size: 36px;
-    font-weight: 800;
-    color: #e0e7ff;
-    letter-spacing: -0.03em;
-    margin: 0 0 10px;
-    text-shadow: 0 2px 16px rgba(79, 70, 229, .4);
-}
-
-.hero-sub {
-    font-size: 15px;
-    color: #a5b4fc;
-    margin: 0 0 24px;
-}
-
-.hero-search {
-    max-width: 540px;
-    margin: 0 auto;
-    position: relative;
-    z-index: 1;
-}
-
-.hero-stats {
-    margin-top: 20px;
+.featured-count {
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    font-size: 13px;
-    color: #818cf8;
 }
 
-.hstat-sep {
-    color: #4338ca;
-}
-
-/* Tag filter */
-.tag-filter {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin: 20px 0 16px;
-    padding: 0 2px;
-}
-
-.tag-pill {
-    padding: 4px 12px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 500;
-    border: 1px solid #e2e8f0;
-    background: #fff;
-    color: #64748b;
-    cursor: pointer;
-    transition: all 0.15s;
-}
-
-.tag-pill:hover {
-    border-color: #6366f1;
-    color: #4f46e5;
-    background: #f0f4ff;
-}
-
-.tag-pill.active {
-    background: #4f46e5;
+.featured-title {
+    padding: 20px 16px 16px;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
     color: #fff;
-    border-color: #4f46e5;
+    line-height: 1.4;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
 }
 
-.tag-count {
-    font-size: 10px;
-    opacity: 0.65;
-    margin-left: 2px;
-}
-
-/* Skeleton cards */
-.skeleton-card {
+/* Case list */
+.case-list {
     display: flex;
-    overflow: hidden;
-    background: #fff;
-    border-radius: 10px;
-    box-shadow: 0 1px 6px rgba(15, 23, 42, .07);
+    flex-direction: column;
+    gap: 0;
 }
 
-.skel-bar {
-    width: 4px;
-    background: #e2e8f0;
+/* Skeleton loading */
+.cases-loading {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
 }
 
-.skel-body {
-    flex: 1;
-    padding: 14px 16px;
+.skeleton-item {
+    padding: 20px 0;
+    border-bottom: 1px solid #f3f4f6;
 }
 
 .skel-title {
-    height: 16px;
+    height: 20px;
+    width: 60%;
     border-radius: 4px;
     margin-bottom: 10px;
-    width: 75%;
+}
+
+.skel-desc {
+    height: 14px;
+    width: 90%;
+    border-radius: 4px;
+    margin-bottom: 8px;
 }
 
 .skel-meta {
-    height: 11px;
+    height: 12px;
+    width: 40%;
     border-radius: 4px;
-    margin-bottom: 8px;
-    width: 50%;
-}
-
-.skel-tags {
-    height: 18px;
-    border-radius: 999px;
-    width: 35%;
-}
-
-/* Grid */
-.cases-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 14px;
-    margin-bottom: 8px;
 }
 
 /* Pagination */
 .pagination {
     display: flex;
     justify-content: center;
-    margin-top: 28px;
+    margin-top: 32px;
+    padding-bottom: 24px;
 }
 
 @media (max-width: 640px) {
-    .hero-section {
-        padding: 36px 20px 32px;
-        margin: -16px -16px 0;
-    }
-
-    .hero-title {
-        font-size: 22px;
-    }
-
-    .cases-grid {
+    .featured-grid {
         grid-template-columns: 1fr;
+    }
+
+    .tab-btn {
+        padding: 10px 16px;
+        font-size: 14px;
     }
 }
 </style>

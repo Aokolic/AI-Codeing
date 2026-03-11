@@ -19,6 +19,7 @@ class DataFeedOut(BaseModel):
     last_collected_at: Optional[datetime] = None
     schedule_cron: str
     created_at: datetime
+    is_builtin: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -27,7 +28,7 @@ class DataFeedCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     feed_type: FeedType
     url: str = Field(..., min_length=10)
-    schedule_cron: str = Field("0 2 * * *")
+    schedule_cron: str = Field("*/30 * * * *")
     parse_config: Optional[Dict[str, Any]] = None
 
 

@@ -10,7 +10,6 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.auth import require_auth
 from app.config import get_settings
 from app.database import get_session
 from app.models.case import Case, CaseStatus, CaseTag, Tag
@@ -177,7 +176,6 @@ async def get_case(
 async def create_case(
     body: CaseCreate,
     db: Annotated[AsyncSession, Depends(get_session)],
-    actor: Annotated[str, Depends(require_auth)],
 ):
     case = Case(
         id=str(uuid.uuid4()),
@@ -193,7 +191,7 @@ async def create_case(
         db.add(CaseTag(case_id=case.id, tag_id=tag_id))
 
     await db.commit()
-    log_action(actor, "CREATE", "Case", case.id)
+    log_action("system", "CREATE", "Case", case.id)
     return await get_case(case.id, db)
 
 
@@ -202,7 +200,6 @@ async def update_case(
     case_id: str,
     body: CaseUpdate,
     db: Annotated[AsyncSession, Depends(get_session)],
-    actor: Annotated[str, Depends(require_auth)],
 ):
     result = await db.execute(select(Case).where(Case.id == case_id))
     case = result.scalar_one_or_none()
@@ -226,5 +223,5 @@ async def update_case(
 
     await refresh_hotness(db, case_id)
     await db.commit()
-    log_action(actor, "UPDATE", "Case", case_id)
+    log_action("system", "UPDATE", "Case", case_id)
     return await get_case(case_id, db)

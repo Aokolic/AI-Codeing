@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
-import { hasToken } from '@/api/client'
 
 const routes: RouteRecordRaw[] = [
     {
@@ -24,7 +23,7 @@ const routes: RouteRecordRaw[] = [
         path: '/admin',
         name: 'Admin',
         component: () => import('@/pages/AdminPage.vue'),
-        meta: { title: '管理后台', requiresAuth: true },
+        meta: { title: '管理后台' },
     },
     {
         path: '/:pathMatch(.*)*',
@@ -38,14 +37,9 @@ const router = createRouter({
     scrollBehavior: () => ({ top: 0 }),
 })
 
-// Auth guard
 router.beforeEach((to, _from, next) => {
-    if (to.meta.requiresAuth && !hasToken()) {
-        next({ name: 'Home', query: { redirect: to.fullPath } })
-    } else {
-        document.title = `${to.meta.title as string} — 后真相时代`
-        next()
-    }
+    document.title = `${to.meta.title as string} — 后真相时代`
+    next()
 })
 
 export default router

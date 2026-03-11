@@ -54,7 +54,7 @@ def start_scheduler() -> None:
     # Default: collect all feeds every 2 hours
     _scheduler.add_job(
         _collect_all_active_feeds,
-        CronTrigger.from_crontab("0 */2 * * *"),
+        CronTrigger.from_crontab("*/30 * * * *"),
         id="collect_all_feeds",
         replace_existing=True,
         misfire_grace_time=300,

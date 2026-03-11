@@ -6,7 +6,7 @@ from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -52,25 +52,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield db_session
 
     app.dependency_overrides[get_session] = _override_session
-    async with AsyncClient(app=app, base_url="http://test") as c:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def auth_headers(client) -> dict:
-    """Get JWT auth headers by logging in with default test credentials."""
-    import asyncio
-    from app.config import get_settings
-    settings = get_settings()
-
-    async def _login():
-        resp = await client.post(
-            "/api/v1/auth/login",
-            json={"username": settings.admin_username, "password": settings.admin_password},
-        )
-        assert resp.status_code == 200
-        token = resp.json()["access_token"]
-        return {"Authorization": f"Bearer {token}"}
-
-    return asyncio.get_event_loop().run_until_complete(_login())

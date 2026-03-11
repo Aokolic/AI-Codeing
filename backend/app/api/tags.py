@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import require_auth
 from app.database import get_session
 from app.models.case import CaseTag, Tag
 from app.schemas.case import TagOut, TagWithCount
@@ -35,7 +34,6 @@ async def list_tags(
 async def create_tag(
     body: TagOut,
     db: Annotated[AsyncSession, Depends(get_session)],
-    actor: Annotated[str, Depends(require_auth)],
 ):
     """Create a new tag. Returns existing tag if name already exists (idempotent)."""
     existing = (

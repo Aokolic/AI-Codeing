@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_session
 from app.models.case import Case
@@ -41,6 +42,7 @@ async def list_events(
         select(EventNode)
         .where(*conditions)
         .order_by(EventNode.event_time.asc())
+        .options(selectinload(EventNode.event_sources).selectinload(EventNodeSource.source))
     )
     nodes = (await db.execute(stmt)).scalars().all()
 
@@ -54,12 +56,6 @@ async def list_events(
             .limit(1)
         )
         cred = cred_result.scalar_one_or_none()
-        src_count = (
-            await db.execute(
-                select(func.count(EventNodeSource.source_id))
-                .where(EventNodeSource.event_node_id == node.id)
-            )
-        ).scalar_one() or 0
 
         cred_brief = None
         if cred:
@@ -69,13 +65,27 @@ async def list_events(
                 has_conflict=cred.has_conflict,
             )
 
+        source_briefs = [
+            SourceBrief(
+                id=es.source.id,
+                name=es.source.name,
+                source_type=es.source.source_type,
+                url=es.source.url,
+                reputation_score=es.source.reputation_score,
+                has_false_history=es.source.has_false_history,
+                collected_at=es.source.collected_at,
+            )
+            for es in node.event_sources
+        ]
+
         results.append(
             EventSummary(
                 id=node.id,
                 title=node.title,
                 event_time=node.event_time,
-                source_count=src_count,
+                source_count=len(source_briefs),
                 credibility=cred_brief,
+                sources=source_briefs,
             )
         )
     return results

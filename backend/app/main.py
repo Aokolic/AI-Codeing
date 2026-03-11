@@ -23,6 +23,10 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     logger.info("Starting up — creating tables…")
     await create_tables()
 
+    # Seed built-in media feeds (idempotent)
+    from app.services.builtin_feeds import seed_builtin_feeds
+    await seed_builtin_feeds()
+
     # Start APScheduler
     from app.tasks.scheduler import start_scheduler, stop_scheduler
     start_scheduler()

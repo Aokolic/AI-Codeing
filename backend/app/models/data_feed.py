@@ -5,7 +5,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Integer, JSON, String, func
+from sqlalchemy import Boolean, DateTime, Enum, Integer, JSON, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -31,7 +31,8 @@ class DataFeed(Base):
     feed_type: Mapped[FeedType] = mapped_column(Enum(FeedType), nullable=False)
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
     parse_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    schedule_cron: Mapped[str] = mapped_column(String(50), nullable=False, default="0 2 * * *")
+    schedule_cron: Mapped[str] = mapped_column(String(50), nullable=False, default="*/30 * * * *")
+    is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[FeedStatus] = mapped_column(
         Enum(FeedStatus), nullable=False, default=FeedStatus.normal
     )

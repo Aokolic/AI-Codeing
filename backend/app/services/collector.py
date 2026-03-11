@@ -15,6 +15,7 @@ from typing import Any
 import feedparser
 import httpx
 from bs4 import BeautifulSoup
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
@@ -106,23 +107,79 @@ def _detect_source_type(source_name: str, url: str) -> SourceType:
     return SourceType.local_media
 
 
-async def _ensure_default_case(db: AsyncSession) -> str:
-    """Get or create a default active case to associate collected events with."""
-    from sqlalchemy import select
+CASE_SIMILARITY_THRESHOLD = 0.55  # lower than event dedup — topic-level grouping
 
-    stmt = select(Case).where(Case.status != CaseStatus.closed).limit(1)
+
+async def _classify_to_case(db: AsyncSession, title: str, summary: str) -> str:
+    """Classify an article into an existing case or create a new one.
+
+    Uses NLP embedding of the article title+summary and compares against
+    all active case titles. If similarity >= CASE_SIMILARITY_THRESHOLD,
+    the article joins that case; otherwise a new case is created.
+    """
+    article_text = f"{title} {summary[:200]}"
+    article_embedding = encode_text(article_text)
+
+    # If NLP model unavailable, create one case per article title
+    if article_embedding is None:
+        return await _create_case_from_article(db, title, summary)
+
+    # Load all active cases
+    stmt = select(Case).where(Case.status != CaseStatus.closed)
     result = await db.execute(stmt)
-    case = result.scalar_one_or_none()
-    if case is None:
-        case = Case(
-            id=str(uuid.uuid4()),
-            title="未分类新闻",
-            description="采集到的未经分类新闻事件",
-            status=CaseStatus.active,
+    cases = result.scalars().all()
+
+    best_case: Case | None = None
+    best_score = 0.0
+
+    for case in cases:
+        # Encode case title for comparison
+        case_embedding = encode_text(case.title)
+        if case_embedding is None:
+            continue
+        score = _cosine_similarity(article_embedding, case_embedding)
+        logger.debug(
+            "Classification: '%s' vs case '%s' → score=%.3f (threshold=%.2f)",
+            title[:30], case.title[:30], score, CASE_SIMILARITY_THRESHOLD,
         )
-        db.add(case)
-        await db.flush()
+        if score >= CASE_SIMILARITY_THRESHOLD and score > best_score:
+            best_score = score
+            best_case = case
+
+    if best_case is not None:
+        logger.info(
+            "Article '%s' classified into case '%s' (score=%.3f)",
+            title[:40], best_case.title[:40], best_score,
+        )
+        return best_case.id
+
+    # No matching case — create a new one
+    return await _create_case_from_article(db, title, summary)
+
+
+async def _create_case_from_article(db: AsyncSession, title: str, summary: str) -> str:
+    """Create a new case from an article's title."""
+    case = Case(
+        id=str(uuid.uuid4()),
+        title=title[:200],
+        description=summary[:500] if summary else title,
+        status=CaseStatus.active,
+    )
+    db.add(case)
+    await db.flush()
+    logger.info("Created new case: '%s'", title[:60])
     return case.id
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Cosine similarity helper."""
+    import numpy as np
+    va = np.array(a, dtype=np.float32)
+    vb = np.array(b, dtype=np.float32)
+    na, nb = np.linalg.norm(va), np.linalg.norm(vb)
+    if na == 0 or nb == 0:
+        return 0.0
+    return float(np.dot(va, vb) / (na * nb))
 
 
 async def collect_feed(feed: DataFeed) -> bool:
@@ -143,14 +200,23 @@ async def collect_feed(feed: DataFeed) -> bool:
         return True  # not a failure — just empty
 
     async with AsyncSessionLocal() as db:
-        case_id = await _ensure_default_case(db)
-
         for art in articles:
             title: str = art["title"][:300]
             summary: str = art["summary"][:2000] if art["summary"] else title
             url: str = art["url"]
             event_time: datetime = art["event_time"]
             source_name: str = art["source_name"]
+
+            # URL deduplication — skip if a Source with the same URL already exists
+            existing_source = await db.execute(
+                select(Source).where(Source.url == url)
+            )
+            if existing_source.scalar_one_or_none() is not None:
+                logger.debug("Skipping duplicate URL: %s", url[:80])
+                continue
+
+            # Auto-classify into existing or new case by topic similarity
+            case_id = await _classify_to_case(db, title, summary)
 
             # NLP dedup — find or create event node
             existing_node = await find_matching_event(db, case_id, title, summary, event_time)

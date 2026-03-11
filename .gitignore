@@ -2,3 +2,24 @@
 .specify/
 .vscode/
 specs/
+
+# Python
+backend/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+*.db
+*.db-shm
+*.db-wal
+backend/.env
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.env.local
+
+# Logs & misc
+*.log
+.DS_Store
+Thumbs.db

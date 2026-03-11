@@ -1,24 +1,44 @@
 <template>
-    <div class="event-card" :class="credibilityClass" data-testid="event-card" @click="handleClick">
+    <div class="event-card" data-testid="event-card" @click="handleClick">
         <!-- Timeline dot -->
-        <div class="timeline-dot"></div>
+        <div class="timeline-dot-wrap">
+            <div class="timeline-dot" :class="dotColor"></div>
+            <div class="timeline-line"></div>
+        </div>
 
         <div class="event-body">
-            <div class="event-header">
-                <div class="event-meta">
-                    <span class="event-time">🕐 {{ formatTime(event.event_time) }}</span>
-                    <span class="meta-sep">·</span>
-                    <span class="source-count">{{ event.source_count }} 来源</span>
-                </div>
-                <credibility-badge v-if="event.credibility" :level="event.credibility.level"
-                    :score="event.credibility.total_score" />
+            <!-- Date badge -->
+            <div class="event-date-row">
+                <span class="date-badge" :class="dotColor">● {{ formatDate(event.event_time) }}</span>
+                <span class="date-relative">{{ fromNow(event.event_time) }}</span>
             </div>
 
-            <div class="event-title">{{ event.title }}</div>
+            <!-- Title -->
+            <h3 class="event-title">{{ event.title }}</h3>
 
-            <!-- T059: low-credibility / conflict warning -->
+            <!-- Source info -->
+            <div class="event-source-row">
+                <span class="source-name">采集来源</span>
+                <span class="source-time">{{ formatTime(event.event_time) }}</span>
+                <span class="source-count">{{ event.source_count }} 来源</span>
+                <credibility-badge v-if="event.credibility" :level="event.credibility.level"
+                    :score="event.credibility.total_score" />
+                <!-- Source icons -->
+                <div v-if="event.sources && event.sources.length > 0" class="source-icons">
+                    <div v-for="(src, i) in displaySources" :key="src.id" class="source-icon"
+                        :style="{ backgroundColor: sourceColor(src.source_type), zIndex: displaySources.length - i }"
+                        :title="`${src.name || '?'} — ${src.source_type}`">
+                        {{ src.name ? src.name.charAt(0) : '?' }}
+                    </div>
+                    <div v-if="overflowCount > 0" class="source-icon overflow" :title="`还有 ${overflowCount} 个来源`">
+                        +{{ overflowCount }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Warning -->
             <div v-if="showWarning" class="credibility-warning">
-                <span class="warn-icon">⚠️</span>
+                ⚠️
                 <span v-if="event.credibility?.has_conflict">来源存在分歧，请交叉核实</span>
                 <span v-else>可信度较低（{{ event.credibility?.level }}），尚未充分核实</span>
             </div>
@@ -30,22 +50,54 @@
 import { computed } from 'vue'
 import CredibilityBadge from './CredibilityBadge.vue'
 import dayjs from 'dayjs'
-import type { EventSummary } from '@/types'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import 'dayjs/locale/zh-cn'
+import type { EventSummary, SourceType } from '@/types'
+
+dayjs.extend(relativeTime)
+dayjs.locale('zh-cn')
+
+const SOURCE_TYPE_COLORS: Record<SourceType, string> = {
+    government: '#ef4444',
+    mainstream_media: '#3b82f6',
+    academic: '#8b5cf6',
+    local_media: '#06b6d4',
+    social_media: '#f97316',
+    unknown: '#9ca3af',
+}
+
+const MAX_VISIBLE_SOURCES = 3
 
 const props = defineProps<{ event: EventSummary }>()
 const emit = defineEmits<{ (e: 'expand', id: string): void }>()
+
+const displaySources = computed(() => (props.event.sources ?? []).slice(0, MAX_VISIBLE_SOURCES))
+const overflowCount = computed(() => Math.max(0, (props.event.sources?.length ?? 0) - MAX_VISIBLE_SOURCES))
+
+function sourceColor(type: string): string {
+    return SOURCE_TYPE_COLORS[type as SourceType] ?? SOURCE_TYPE_COLORS.unknown
+}
 
 function handleClick() {
     emit('expand', props.event.id)
 }
 
-function formatTime(t: string) {
-    return dayjs(t).format('YYYY-MM-DD HH:mm')
+function formatDate(t: string) {
+    return dayjs(t).format('MM/DD')
 }
 
-const credibilityClass = computed(() => {
+function formatTime(t: string) {
+    return dayjs(t).format('HH:mm')
+}
+
+function fromNow(t: string) {
+    return dayjs(t).fromNow()
+}
+
+const dotColor = computed(() => {
     const level = props.event.credibility?.level
-    return { [`credibility-${level}`]: !!level }
+    if (!level) return 'dot-default'
+    return `dot-${level}`
 })
 
 const showWarning = computed(() => {
@@ -59,115 +111,181 @@ const showWarning = computed(() => {
 .event-card {
     display: flex;
     gap: 0;
-    padding: 14px 16px 14px 0;
-    border-radius: 0;
+    padding: 0 0 24px;
     cursor: pointer;
-    transition: background 0.15s;
     position: relative;
 }
 
-.event-card:hover {
-    background: rgba(79, 70, 229, .03);
-    border-radius: 8px;
-}
-
-/* Colored left accent per credibility level */
-.credibility-low .timeline-dot {
-    background: #d97706;
-    box-shadow: 0 0 0 4px #fef3c7;
-}
-
-.credibility-unverified .timeline-dot {
-    background: #dc2626;
-    box-shadow: 0 0 0 4px #fee2e2;
-}
-
-.credibility-medium .timeline-dot {
-    background: #2563eb;
-    box-shadow: 0 0 0 4px #dbeafe;
-}
-
-.credibility-high .timeline-dot {
-    background: #059669;
-    box-shadow: 0 0 0 4px #d1fae5;
+.event-card:hover .event-title {
+    color: #ef4444;
 }
 
 /* Timeline dot */
-.timeline-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #cbd5e1;
+.timeline-dot-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 24px;
     flex-shrink: 0;
-    margin-top: 5px;
-    margin-right: 14px;
-    margin-left: 4px;
-    transition: all 0.15s;
+    padding-top: 4px;
+}
+
+.timeline-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #d1d5db;
+    flex-shrink: 0;
+    z-index: 1;
+}
+
+.timeline-line {
+    width: 2px;
+    flex: 1;
+    background: #e5e7eb;
+    margin-top: 4px;
+}
+
+.event-card:last-child .timeline-line {
+    display: none;
+}
+
+.dot-default {
+    background: #d1d5db;
+}
+
+.dot-high {
+    background: #059669;
+}
+
+.dot-medium {
+    background: #2563eb;
+}
+
+.dot-low {
+    background: #f59e0b;
+}
+
+.dot-unverified {
+    background: #ef4444;
 }
 
 .event-body {
     flex: 1;
     min-width: 0;
+    padding-left: 12px;
 }
 
-.event-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 5px;
-    gap: 8px;
-}
-
-.event-meta {
+/* Date row */
+.event-date-row {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: #64748b;
+    gap: 10px;
+    margin-bottom: 6px;
 }
 
-.meta-sep {
-    color: #cbd5e1;
+.date-badge {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ef4444;
 }
 
-.event-time {
-    font-variant-numeric: tabular-nums;
+.date-badge.dot-high {
+    color: #059669;
+}
+
+.date-badge.dot-medium {
+    color: #2563eb;
+}
+
+.date-badge.dot-low {
+    color: #f59e0b;
+}
+
+.date-badge.dot-unverified {
+    color: #ef4444;
+}
+
+.date-badge.dot-default {
+    color: #ef4444;
+}
+
+.date-relative {
+    font-size: 13px;
+    color: #9ca3af;
+}
+
+/* Title */
+.event-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0 0 8px;
+    line-height: 1.5;
+    transition: color 0.15s;
+}
+
+/* Source row */
+.event-source-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: #9ca3af;
+    flex-wrap: wrap;
+}
+
+.source-name {
+    color: #ef4444;
+    font-weight: 500;
 }
 
 .source-count {
-    color: #94a3b8;
+    color: #6b7280;
 }
 
-.event-title {
-    font-size: 14px;
-    font-weight: 500;
-    color: #0f172a;
-    line-height: 1.5;
+/* Source icons */
+.source-icons {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
 }
 
-/* Warning strip */
+.source-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    border: 2px solid #fff;
+    cursor: default;
+    flex-shrink: 0;
+}
+
+.source-icon+.source-icon {
+    margin-left: -8px;
+}
+
+.source-icon.overflow {
+    background: #9ca3af;
+    font-size: 11px;
+}
+
+/* Warning */
 .credibility-warning {
     display: flex;
     align-items: center;
     gap: 6px;
     margin-top: 8px;
-    padding: 5px 10px;
+    padding: 6px 12px;
     background: #fffbeb;
     border: 1px solid #fef08a;
     border-radius: 6px;
     font-size: 12px;
     color: #92400e;
-}
-
-.credibility-low .credibility-warning,
-.credibility-unverified .credibility-warning {
-    background: #fff1f2;
-    border-color: #fecdd3;
-    color: #9f1239;
-}
-
-.warn-icon {
-    flex-shrink: 0;
-    font-size: 13px;
 }
 </style>

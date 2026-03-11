@@ -1,7 +1,10 @@
 <template>
     <div class="feed-status-panel">
         <div class="feed-info">
-            <div class="feed-name">{{ feed.name }}</div>
+            <div class="feed-name">
+                {{ feed.name }}
+                <n-tag v-if="feed.is_builtin" type="info" size="tiny" :bordered="false" class="builtin-badge">内置</n-tag>
+            </div>
             <div class="feed-meta">
                 <n-tag :type="statusTagType" size="small" :bordered="false" :data-status="feed.status">
                     {{ statusLabel }}
@@ -22,7 +25,7 @@
             <n-button size="small" quaternary @click="emit('edit', feed.id)">
                 编辑
             </n-button>
-            <n-button size="small" quaternary type="error" @click="emit('delete', feed.id)">
+            <n-button v-if="!feed.is_builtin" size="small" quaternary type="error" @click="emit('delete', feed.id)">
                 删除
             </n-button>
         </div>
@@ -99,6 +102,14 @@ function formatTime(t: string) {
     font-weight: 600;
     color: #0f172a;
     margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.builtin-badge {
+    font-size: 10px;
+    vertical-align: middle;
 }
 
 .feed-meta {

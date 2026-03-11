@@ -51,6 +51,7 @@ class CaseCreate(BaseModel):
 class CaseUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
+    status: Optional[CaseStatus] = None
     tag_ids: Optional[List[str]] = None
 
 

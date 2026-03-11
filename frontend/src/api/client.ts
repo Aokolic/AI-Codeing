@@ -1,5 +1,5 @@
 /**
- * HTTP API client — axios with JWT header injection and error interceptors.
+ * HTTP API client — axios with error interceptors.
  */
 import axios, { type AxiosInstance, type AxiosError } from 'axios'
 
@@ -10,15 +10,6 @@ const apiClient: AxiosInstance = axios.create({
     baseURL: BASE_URL,
     timeout: 15_000,
     headers: { 'Content-Type': 'application/json' },
-})
-
-// ── Request interceptor: inject JWT Bearer token if available ────────────────
-apiClient.interceptors.request.use((config) => {
-    const token = localStorage.getItem('access_token')
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
 })
 
 // ── Response interceptor: normalise errors ───────────────────────────────────
@@ -34,17 +25,3 @@ apiClient.interceptors.response.use(
 )
 
 export default apiClient
-
-// ─── Auth helpers ─────────────────────────────────────────────────────────────
-
-export function setToken(token: string): void {
-    localStorage.setItem('access_token', token)
-}
-
-export function clearToken(): void {
-    localStorage.removeItem('access_token')
-}
-
-export function hasToken(): boolean {
-    return !!localStorage.getItem('access_token')
-}

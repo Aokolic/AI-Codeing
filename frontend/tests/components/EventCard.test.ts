@@ -9,6 +9,10 @@ const mockEvent: EventSummary = {
     event_time: '2024-06-01T10:00:00Z',
     source_count: 3,
     credibility: { level: 'high', total_score: 82.5, has_conflict: false },
+    sources: [
+        { id: 's1', name: '新华社', source_type: 'government' },
+        { id: 's2', name: '央视网', source_type: 'mainstream_media' },
+    ],
 }
 
 describe('EventCard', () => {
@@ -37,7 +41,7 @@ describe('EventCard', () => {
     it('shows conflict warning when has_conflict is true', () => {
         const conflictEvent = { ...mockEvent, credibility: { level: 'medium' as const, total_score: 55, has_conflict: true } }
         const wrapper = mount(EventCard, { props: { event: conflictEvent } })
-        expect(wrapper.html()).toContain('conflict')
+        expect(wrapper.html()).toContain('credibility-warning')
     })
 
     it('applies low-credibility warning class for unverified events', () => {

@@ -15,17 +15,16 @@ async def test_list_cases_empty(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_create_case_requires_auth(client: AsyncClient):
+async def test_create_case_no_auth_needed(client: AsyncClient):
     resp = await client.post("/api/v1/cases", json={"title": "Test"})
-    assert resp.status_code == 401
+    assert resp.status_code == 201
 
 
 @pytest.mark.asyncio
-async def test_create_and_get_case(client: AsyncClient, auth_headers: dict):
+async def test_create_and_get_case(client: AsyncClient):
     create = await client.post(
         "/api/v1/cases",
         json={"title": "COVID-19疫苗争议", "description": "关于疫苗副作用的不实信息"},
-        headers=auth_headers,
     )
     assert create.status_code == 201
     case_id = create.json()["id"]
@@ -37,28 +36,25 @@ async def test_create_and_get_case(client: AsyncClient, auth_headers: dict):
 
 
 @pytest.mark.asyncio
-async def test_update_case_title(client: AsyncClient, auth_headers: dict):
+async def test_update_case_title(client: AsyncClient):
     create = await client.post(
         "/api/v1/cases",
         json={"title": "原始标题"},
-        headers=auth_headers,
     )
     case_id = create.json()["id"]
     patch = await client.patch(
         f"/api/v1/cases/{case_id}",
         json={"title": "更新后的标题"},
-        headers=auth_headers,
     )
     assert patch.status_code == 200
     assert patch.json()["title"] == "更新后的标题"
 
 
 @pytest.mark.asyncio
-async def test_search_cases(client: AsyncClient, auth_headers: dict):
+async def test_search_cases(client: AsyncClient):
     await client.post(
         "/api/v1/cases",
         json={"title": "新冠病毒溯源报告"},
-        headers=auth_headers,
     )
     search = await client.get("/api/v1/cases/search?q=新冠")
     assert search.status_code == 200

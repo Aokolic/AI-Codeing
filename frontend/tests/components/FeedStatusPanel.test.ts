@@ -14,6 +14,7 @@ function makeFeed(overrides: Partial<DataFeedOut> = {}): DataFeedOut {
         last_collected_at: null,
         schedule_cron: '0 2 * * *',
         created_at: '2026-01-01T00:00:00Z',
+        is_builtin: false,
         ...overrides,
     }
 }

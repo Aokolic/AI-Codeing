@@ -1,4 +1,4 @@
-"""Data feeds API endpoints — full CRUD + manual collection trigger (JWT-protected)."""
+"""Data feeds API endpoints — full CRUD + manual collection trigger."""
 from __future__ import annotations
 
 import uuid
@@ -9,7 +9,6 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import require_auth
 from app.database import get_session
 from app.models.data_feed import DataFeed, FeedStatus
 from app.schemas.common import PaginatedResponse
@@ -23,7 +22,6 @@ router = APIRouter(prefix="/feeds", tags=["feeds"])
 @router.get("", response_model=PaginatedResponse[DataFeedOut])
 async def list_feeds(
     db: Annotated[AsyncSession, Depends(get_session)],
-    actor: Annotated[str, Depends(require_auth)],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
@@ -43,7 +41,6 @@ async def list_feeds(
 async def create_feed(
     body: DataFeedCreate,
     db: Annotated[AsyncSession, Depends(get_session)],
-    actor: Annotated[str, Depends(require_auth)],
 ):
     feed = DataFeed(
         id=str(uuid.uuid4()),
@@ -59,7 +56,7 @@ async def create_feed(
     db.add(feed)
     await db.commit()
     await db.refresh(feed)
-    log_action(actor, "CREATE", "DataFeed", feed.id)
+    log_action("system", "CREATE", "DataFeed", feed.id)
     return DataFeedOut.model_validate(feed)
 
 
@@ -68,12 +65,21 @@ async def update_feed(
     feed_id: str,
     body: DataFeedUpdate,
     db: Annotated[AsyncSession, Depends(get_session)],
-    actor: Annotated[str, Depends(require_auth)],
 ):
     result = await db.execute(select(DataFeed).where(DataFeed.id == feed_id))
     feed = result.scalar_one_or_none()
     if feed is None:
         raise HTTPException(status_code=404, detail="Feed not found")
+
+    # Built-in feed field protection
+    if feed.is_builtin:
+        protected = {"name", "url", "feed_type", "schedule_cron"}
+        changed = {k for k, v in body.model_dump(exclude_unset=True).items() if k in protected}
+        if changed:
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot modify protected fields of a built-in feed. Only status and parse_config can be changed.",
+            )
 
     if body.name is not None:
         feed.name = body.name
@@ -88,7 +94,7 @@ async def update_feed(
 
     await db.commit()
     await db.refresh(feed)
-    log_action(actor, "UPDATE", "DataFeed", feed_id)
+    log_action("system", "UPDATE", "DataFeed", feed_id)
     return DataFeedOut.model_validate(feed)
 
 
@@ -96,15 +102,19 @@ async def update_feed(
 async def delete_feed(
     feed_id: str,
     db: Annotated[AsyncSession, Depends(get_session)],
-    actor: Annotated[str, Depends(require_auth)],
 ):
     result = await db.execute(select(DataFeed).where(DataFeed.id == feed_id))
     feed = result.scalar_one_or_none()
     if feed is None:
         raise HTTPException(status_code=404, detail="Feed not found")
+    if feed.is_builtin:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot delete built-in feed. You can disable it by setting status to 'offline'.",
+        )
     await db.delete(feed)
     await db.commit()
-    log_action(actor, "DELETE", "DataFeed", feed_id)
+    log_action("system", "DELETE", "DataFeed", feed_id)
 
 
 @router.post("/{feed_id}/collect", response_model=CollectTriggerResponse)
@@ -112,7 +122,6 @@ async def trigger_collect(
     feed_id: str,
     background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_session)],
-    actor: Annotated[str, Depends(require_auth)],
 ):
     """Manually trigger data collection for a specific feed (runs in background)."""
     result = await db.execute(select(DataFeed).where(DataFeed.id == feed_id))
@@ -121,7 +130,7 @@ async def trigger_collect(
         raise HTTPException(status_code=404, detail="Feed not found")
 
     background_tasks.add_task(run_collection_for_feed, feed_id)
-    log_action(actor, "TRIGGER_COLLECT", "DataFeed", feed_id)
+    log_action("system", "TRIGGER_COLLECT", "DataFeed", feed_id)
     return CollectTriggerResponse(
         feed_id=feed_id,
         message=f"Collection started for feed '{feed.name}'",

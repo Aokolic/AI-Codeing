@@ -6,15 +6,13 @@
                 <router-link to="/" class="brand">
                     <span class="brand-icon">⚡</span>
                     <span class="brand-name">后真相时代</span>
-                    <span class="brand-sub">信息甄别平台</span>
                 </router-link>
                 <div class="header-center">
                     <SearchBar compact @search="handleSearch" />
                 </div>
                 <nav class="header-nav">
                     <router-link to="/" class="nav-link">首页</router-link>
-                    <router-link v-if="isAdmin" to="/admin" class="nav-link nav-admin">管理后台</router-link>
-                    <router-link v-else to="/admin" class="nav-link nav-login">登录</router-link>
+                    <router-link to="/admin" class="nav-link">管理</router-link>
                 </nav>
             </div>
         </header>
@@ -40,13 +38,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { hasToken } from '@/api/client'
 import SearchBar from './SearchBar.vue'
 
 const router = useRouter()
-const isAdmin = computed(() => hasToken())
 
 function handleSearch(q: string) {
     router.push({ name: 'Search', query: { q } })
@@ -59,7 +54,7 @@ function handleSearch(q: string) {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    background: #f0f2f7;
+    background: #fff;
 }
 
 /* ── Header ── */
@@ -67,16 +62,15 @@ function handleSearch(q: string) {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #312e81 100%);
-    box-shadow: 0 2px 16px rgba(15, 23, 42, .35);
-    backdrop-filter: blur(8px);
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
 }
 
 .header-inner {
-    max-width: 1200px;
+    max-width: 960px;
     margin: 0 auto;
     padding: 0 24px;
-    height: 60px;
+    height: 56px;
     display: flex;
     align-items: center;
     gap: 20px;
@@ -93,73 +87,47 @@ function handleSearch(q: string) {
 
 .brand-icon {
     font-size: 20px;
-    filter: drop-shadow(0 0 6px #a5b4fc);
 }
 
 .brand-name {
-    font-size: 17px;
-    font-weight: 700;
-    color: #e0e7ff;
-    letter-spacing: -0.01em;
-}
-
-.brand-sub {
-    font-size: 11px;
-    color: #818cf8;
-    background: rgba(129, 140, 248, .15);
-    border: 1px solid rgba(129, 140, 248, .25);
-    padding: 1px 7px;
-    border-radius: 999px;
-    letter-spacing: 0.04em;
+    font-size: 18px;
+    font-weight: 800;
+    color: #1a1a1a;
+    letter-spacing: -0.02em;
 }
 
 /* Center search */
 .header-center {
     flex: 1;
-    max-width: 440px;
+    max-width: 400px;
 }
 
 /* Nav */
 .header-nav {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     flex-shrink: 0;
 }
 
 .nav-link {
     padding: 6px 14px;
     border-radius: 6px;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
-    color: #c7d2fe;
+    color: #6b7280;
     text-decoration: none;
     transition: all 0.15s;
 }
 
 .nav-link:hover {
-    background: rgba(255, 255, 255, .1);
-    color: #fff;
+    background: #f3f4f6;
+    color: #1a1a1a;
 }
 
 .nav-link.router-link-active {
-    background: rgba(99, 102, 241, .3);
-    color: #e0e7ff;
-}
-
-.nav-admin {
-    background: rgba(245, 158, 11, .15);
-    border: 1px solid rgba(245, 158, 11, .3);
-    color: #fcd34d;
-}
-
-.nav-admin:hover {
-    background: rgba(245, 158, 11, .25);
-    color: #fde68a;
-}
-
-.nav-login {
-    border: 1px solid rgba(129, 140, 248, .3);
+    color: #ef4444;
+    font-weight: 600;
 }
 
 /* ── Main ── */
@@ -168,41 +136,39 @@ function handleSearch(q: string) {
 }
 
 .main-inner {
-    max-width: 1200px;
+    max-width: 960px;
     margin: 0 auto;
-    padding: 28px 24px;
+    padding: 24px 24px;
 }
 
 /* ── Footer ── */
 .app-footer {
-    background: #0f172a;
-    border-top: 1px solid rgba(255, 255, 255, .06);
+    background: #fafafa;
+    border-top: 1px solid #f3f4f6;
     padding: 14px 24px;
 }
 
 .footer-inner {
-    max-width: 1200px;
+    max-width: 960px;
     margin: 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     font-size: 12px;
-    color: #64748b;
+    color: #9ca3af;
 }
 
 .footer-brand {
-    color: #818cf8;
+    color: #ef4444;
     font-weight: 600;
 }
 
 .footer-divider {
-    color: #334155;
+    color: #d1d5db;
 }
 
 @media (max-width: 640px) {
-
-    .brand-sub,
     .header-center {
         display: none;
     }

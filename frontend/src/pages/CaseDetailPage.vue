@@ -14,43 +14,55 @@
 
         <!-- Case detail -->
         <template v-else-if="caseDetail">
-            <!-- Header -->
-            <div class="case-header">
-                <div class="header-top">
-                    <n-breadcrumb>
-                        <n-breadcrumb-item href="/">首页</n-breadcrumb-item>
-                        <n-breadcrumb-item>{{ caseDetail.title }}</n-breadcrumb-item>
-                    </n-breadcrumb>
-                </div>
-                <div class="header-main">
-                    <h1 class="case-title">{{ caseDetail.title }}</h1>
-                    <n-tag :type="statusTagType" size="medium" style="margin-left: 12px;">{{ statusLabel }}</n-tag>
-                </div>
-                <p v-if="caseDetail.description" class="case-desc">{{ caseDetail.description }}</p>
-                <div class="case-stats">
-                    <n-statistic label="热度" :value="Math.round(caseDetail.hotness_score)" />
-                    <n-statistic label="事件数" :value="caseDetail.event_count" />
-                    <n-statistic label="来源数" :value="caseDetail.source_count" />
-                </div>
-                <div v-if="caseDetail.tags?.length" class="case-tags">
-                    <n-tag v-for="tag in caseDetail.tags" :key="tag.id" size="small" style="margin-right: 6px;">
-                        {{ tag.name }}
-                    </n-tag>
-                </div>
+            <!-- Breadcrumb -->
+            <div class="breadcrumb">
+                <router-link to="/" class="bc-link">热点</router-link>
+                <span class="bc-sep">›</span>
+                <span class="bc-current">跟踪</span>
             </div>
 
-            <!-- Time filter -->
-            <div class="filter-bar">
-                <n-date-picker v-model:value="dateRange" type="daterange" clearable placeholder="开始时间 - 结束时间"
-                    @update:value="handleDateFilter" />
+            <!-- Case header section -->
+            <div class="detail-header">
+                <h1 class="detail-title">{{ caseDetail.title }}</h1>
+                <div class="detail-author">
+                    <span class="author-name">系统采集</span>
+                    <span class="author-sep">·</span>
+                    <span class="author-time">{{ fromNow(caseDetail.created_at) }}</span>
+                </div>
+                <p v-if="caseDetail.description" class="detail-desc">{{ caseDetail.description }}</p>
             </div>
 
-            <!-- Timeline -->
-            <timeline :events="timelineState.events.value" :loading="timelineState.loading.value"
-                @event-click="handleEventClick" />
+            <!-- Main content with sidebar -->
+            <div class="detail-layout">
+                <!-- Timeline main column -->
+                <div class="detail-main">
+                    <!-- Time filter -->
+                    <div class="filter-bar">
+                        <n-date-picker v-model:value="dateRange" type="daterange" clearable placeholder="筛选时间范围"
+                            @update:value="handleDateFilter" />
+                    </div>
+
+                    <!-- Timeline -->
+                    <timeline :events="timelineState.events.value" :loading="timelineState.loading.value"
+                        @event-click="handleEventClick" />
+                </div>
+
+                <!-- Calendar sidebar -->
+                <aside v-if="monthGroups.length" class="detail-sidebar">
+                    <div v-for="mg in monthGroups" :key="mg.label" class="month-group">
+                        <div class="month-label">{{ mg.label }}</div>
+                        <div class="day-list">
+                            <button v-for="d in mg.days" :key="d" class="day-btn"
+                                :class="{ active: activeDay === `${mg.label}-${d}` }" @click="scrollToDay(mg.label, d)">
+                                {{ d }}日
+                            </button>
+                        </div>
+                    </div>
+                </aside>
+            </div>
         </template>
 
-        <!-- Credibility drawer (T058) -->
+        <!-- Credibility drawer -->
         <n-drawer v-model:show="drawerVisible" :width="480" title="可信度详情">
             <n-drawer-content>
                 <div v-if="credLoading" class="drawer-loading"><n-spin /></div>
@@ -64,8 +76,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import {
-    NSkeleton, NResult, NButton, NTag, NBreadcrumb, NBreadcrumbItem,
-    NStatistic, NDatePicker, NDrawer, NDrawerContent, NSpin,
+    NSkeleton, NResult, NButton, NDatePicker, NDrawer, NDrawerContent, NSpin,
 } from 'naive-ui'
 import Timeline from '@/components/Timeline.vue'
 import CredibilityPanel from '@/components/CredibilityPanel.vue'
@@ -73,6 +84,12 @@ import { getCaseDetail } from '@/api/cases'
 import { getCredibilityDetail } from '@/api/credibility'
 import { useTimeline } from '@/composables/useTimeline'
 import type { CaseDetail, CredibilityDetail } from '@/types'
+import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import 'dayjs/locale/zh-cn'
+
+dayjs.extend(relativeTime)
+dayjs.locale('zh-cn')
 
 const route = useRoute()
 const caseId = computed(() => route.params.id as string)
@@ -80,6 +97,7 @@ const caseId = computed(() => route.params.id as string)
 const caseDetail = ref<CaseDetail | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
+const activeDay = ref('')
 
 const timelineState = useTimeline(caseId.value)
 
@@ -89,16 +107,33 @@ const drawerVisible = ref(false)
 const credDetail = ref<CredibilityDetail | null>(null)
 const credLoading = ref(false)
 
-const statusLabelMap: Record<string, string> = {
-    active: '进行中', resolved: '已解决', archived: '已归档', observing: '待观察', closed: '已结案',
+function fromNow(dateStr: string) {
+    return dayjs(dateStr).fromNow()
 }
-const statusLabel = computed(() => caseDetail.value ? statusLabelMap[caseDetail.value.status] : '')
-const statusTagType = computed(() => {
-    const map: Record<string, 'success' | 'warning' | 'default'> = {
-        active: 'warning', resolved: 'success', archived: 'default', observing: 'default', closed: 'success',
+
+// Build month/day groups from events for sidebar calendar
+const monthGroups = computed(() => {
+    const events = timelineState.events.value
+    if (!events.length) return []
+
+    const groups: Map<string, Set<number>> = new Map()
+    for (const e of events) {
+        const d = dayjs(e.event_time)
+        const label = `${d.month() + 1}月`
+        if (!groups.has(label)) groups.set(label, new Set())
+        groups.get(label)!.add(d.date())
     }
-    return caseDetail.value ? (map[caseDetail.value.status] ?? 'default') : 'default'
+
+    return Array.from(groups.entries()).map(([label, days]) => ({
+        label,
+        days: Array.from(days).sort((a, b) => b - a),
+    }))
 })
+
+function scrollToDay(month: string, day: number) {
+    activeDay.value = `${month}-${day}`
+    // Could scroll to specific event, for now just visual highlight
+}
 
 async function load() {
     loading.value = true
@@ -143,60 +178,135 @@ onMounted(load)
 
 <style scoped>
 .case-detail-page {
-    max-width: 900px;
+    max-width: 960px;
     margin: 0 auto;
 }
 
-/* Header card */
-.case-header {
-    background: #fff;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
-    padding: 24px 28px;
-    margin-bottom: 16px;
-    box-shadow: 0 1px 6px rgba(15, 23, 42, .06);
-}
-
-.header-top {
-    margin-bottom: 12px;
-}
-
-.header-main {
+/* Breadcrumb */
+.breadcrumb {
     display: flex;
-    align-items: flex-start;
-    margin-bottom: 12px;
-    gap: 12px;
-}
-
-.case-title {
-    font-size: 22px;
-    font-weight: 700;
-    margin: 0;
-    color: #0f172a;
-    line-height: 1.35;
-}
-
-.case-desc {
-    color: #64748b;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
     font-size: 14px;
-    margin: 0 0 16px;
-    line-height: 1.6;
 }
 
-.case-stats {
-    display: flex;
-    gap: 28px;
-    margin-bottom: 14px;
-    padding: 14px 16px;
-    background: #f8fafc;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
+.bc-link {
+    color: #ef4444;
+    text-decoration: none;
+    font-weight: 500;
 }
 
-.case-tags {
+.bc-link:hover {
+    text-decoration: underline;
+}
+
+.bc-sep {
+    color: #d1d5db;
+}
+
+.bc-current {
+    color: #9ca3af;
+}
+
+/* Header */
+.detail-header {
+    margin-bottom: 28px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.detail-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #1a1a1a;
+    margin: 0 0 12px;
+    line-height: 1.35;
+    letter-spacing: -0.02em;
+}
+
+.detail-author {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #9ca3af;
+    margin-bottom: 16px;
+}
+
+.author-name {
+    color: #6b7280;
+}
+
+.author-sep {
+    color: #d1d5db;
+}
+
+.detail-desc {
+    font-size: 15px;
+    color: #4b5563;
+    line-height: 1.8;
+    margin: 0;
+}
+
+/* Layout */
+.detail-layout {
+    display: flex;
+    gap: 32px;
+}
+
+.detail-main {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Sidebar calendar */
+.detail-sidebar {
+    width: 100px;
+    flex-shrink: 0;
+    padding-top: 48px;
+}
+
+.month-group {
+    margin-bottom: 16px;
+}
+
+.month-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+.day-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+}
+
+.day-btn {
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    font-size: 14px;
+    color: #6b7280;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    width: 100%;
+    text-align: left;
+}
+
+.day-btn:hover {
+    background: #f3f4f6;
+    color: #1a1a1a;
+}
+
+.day-btn.active {
+    color: #ef4444;
+    font-weight: 600;
+    background: #fef2f2;
 }
 
 /* Filter bar */
@@ -209,5 +319,15 @@ onMounted(load)
     display: flex;
     justify-content: center;
     padding: 60px 0;
+}
+
+@media (max-width: 768px) {
+    .detail-sidebar {
+        display: none;
+    }
+
+    .detail-title {
+        font-size: 22px;
+    }
 }
 </style>

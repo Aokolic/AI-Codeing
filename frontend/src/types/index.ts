@@ -31,18 +31,6 @@ export interface ErrorResponse {
     detail: string
 }
 
-// ─── Auth ────────────────────────────────────────────────────────────────────
-
-export interface LoginRequest {
-    username: string
-    password: string
-}
-
-export interface TokenResponse {
-    access_token: string
-    token_type: string
-}
-
 // ─── Tag ─────────────────────────────────────────────────────────────────────
 
 export interface TagOut {
@@ -106,6 +94,7 @@ export interface EventSummary {
     event_time: string
     source_count: number
     credibility: CredibilityBrief | null
+    sources: SourceBrief[]
 }
 
 export interface SourceBrief {
@@ -175,6 +164,7 @@ export interface DataFeedOut {
     last_collected_at: string | null
     schedule_cron: string
     created_at: string
+    is_builtin: boolean
 }
 
 export interface DataFeedCreate {
