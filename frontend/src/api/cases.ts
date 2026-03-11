@@ -8,7 +8,6 @@ import type {
     CaseSummary,
     CaseUpdate,
     PaginatedResponse,
-    SearchSuggestedCase,
     TagOut,
     TagWithCount,
 } from '@/types'
@@ -42,8 +41,8 @@ export async function updateCase(id: string, data: CaseUpdate): Promise<CaseDeta
 export async function searchCases(
     q: string,
     limit = 10,
-): Promise<SearchSuggestedCase[]> {
-    const res = await apiClient.get<SearchSuggestedCase[]>('/cases/search', {
+): Promise<CaseSummary[]> {
+    const res = await apiClient.get<CaseSummary[]>('/cases/search', {
         params: { q, limit },
     })
     return res.data

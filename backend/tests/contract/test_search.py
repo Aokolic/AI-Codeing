@@ -19,7 +19,16 @@ async def test_search_returns_list(client: AsyncClient):
     )
     resp = await client.get("/api/v1/cases/search?q=离婚")
     assert resp.status_code == 200
-    assert isinstance(resp.json(), list)
+    data = resp.json()
+    assert isinstance(data, list)
+    assert len(data) >= 1
+    item = data[0]
+    # Now returns CaseSummary with full fields
+    assert "title" in item
+    assert "hotness_score" in item
+    assert "tags" in item
+    assert "event_count" in item
+    assert "source_count" in item
 
 
 @pytest.mark.asyncio

@@ -106,7 +106,7 @@ async def list_cases(
     )
 
 
-@router.get("/search", response_model=list[SearchSuggestedCase])
+@router.get("/search", response_model=list[CaseSummary])
 async def search_cases(
     db: Annotated[AsyncSession, Depends(get_session)],
     q: str = Query(..., min_length=1, max_length=200),
@@ -136,23 +136,7 @@ async def search_cases(
         )
 
     rows = (await db.execute(stmt)).scalars().all()
-
-    results = []
-    for c in rows:
-        evt_count = (
-            await db.execute(
-                select(func.count(EventNode.id)).where(EventNode.case_id == c.id)
-            )
-        ).scalar_one() or 0
-        results.append(
-            SearchSuggestedCase(
-                id=c.id,
-                title=c.title,
-                status=c.status,
-                event_count=evt_count,
-            )
-        )
-    return results
+    return [await _case_summary(db, c) for c in rows]
 
 
 @router.get("/{case_id}", response_model=CaseDetail)
