@@ -57,12 +57,12 @@ const labelMap: Record<CredibilityLevel, string> = {
 }
 
 .level-medium {
-    background: #dbeafe;
-    color: #1e40af;
+    background: #ede9fe;
+    color: #5b21b6;
 }
 
 .level-medium .dot {
-    background: #2563eb;
+    background: #7c3aed;
 }
 
 .level-low {

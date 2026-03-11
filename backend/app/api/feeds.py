@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -120,19 +120,18 @@ async def delete_feed(
 @router.post("/{feed_id}/collect", response_model=CollectTriggerResponse)
 async def trigger_collect(
     feed_id: str,
-    background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_session)],
 ):
-    """Manually trigger data collection for a specific feed (runs in background)."""
+    """Manually trigger data collection for a specific feed (synchronous)."""
     result = await db.execute(select(DataFeed).where(DataFeed.id == feed_id))
     feed = result.scalar_one_or_none()
     if feed is None:
         raise HTTPException(status_code=404, detail="Feed not found")
 
-    background_tasks.add_task(run_collection_for_feed, feed_id)
+    await run_collection_for_feed(feed_id)
     log_action("system", "TRIGGER_COLLECT", "DataFeed", feed_id)
     return CollectTriggerResponse(
         feed_id=feed_id,
-        message=f"Collection started for feed '{feed.name}'",
+        message=f"Collection finished for feed '{feed.name}'",
         triggered_at=datetime.now(timezone.utc),
     )

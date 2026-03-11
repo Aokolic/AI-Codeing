@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     nlp_similarity_threshold: float = 0.82
     nlp_time_window_hours: int = 48
 
+    # Case classification
+    case_similarity_threshold: float = 0.45
+    case_entity_overlap_threshold: float = 0.3
+
     # Logging
     log_level: str = "INFO"
 

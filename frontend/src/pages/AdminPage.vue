@@ -15,7 +15,7 @@
         <!-- Feed list -->
         <div v-if="feedsLoading" class="loading-section"><n-spin /></div>
         <div v-else-if="feeds.length" class="feeds-list">
-            <feed-status-panel v-for="feed in feeds" :key="feed.id" :feed="feed" @collect="handleCollect"
+            <feed-status-panel v-for="feed in feeds" :key="feed.id" :feed="feed" @collected="handleCollected"
                 @edit="handleEditFeed" @delete="handleDeleteFeed" />
         </div>
         <n-empty v-else description="暂无数据源，点击「添加数据源」开始配置" />
@@ -55,7 +55,7 @@ import {
     NForm, NFormItem, NInput, NButton, NModal, NSelect, NEmpty, NSpin, NPagination, useMessage,
 } from 'naive-ui'
 import FeedStatusPanel from '@/components/FeedStatusPanel.vue'
-import { listFeeds, createFeed, updateFeed, deleteFeed, triggerCollect } from '@/api/feeds'
+import { listFeeds, createFeed, updateFeed, deleteFeed } from '@/api/feeds'
 import type { DataFeedOut, DataFeedCreate } from '@/types'
 
 const message = useMessage()
@@ -138,8 +138,8 @@ async function handleDeleteFeed(id: string) {
     loadFeeds()
 }
 
-async function handleCollect(id: string) {
-    await triggerCollect(id)
+async function handleCollected() {
+    loadFeeds()
 }
 
 onMounted(() => {

@@ -1,12 +1,13 @@
 # ⚡ 后真相时代 — 信息甄别平台
 
-> 多来源聚合 · 事件时间线追踪 · 三维可信度量化评估
+> 多来源聚合 · 事件时间线追踪 · 三维可信度量化评估 · 智能事件归类
 
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.135-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Vue](https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vuedotjs&logoColor=white)](https://vuejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?logo=typescript&logoColor=white)](https://typescriptlang.org)
-[![Tests](https://img.shields.io/badge/Tests-36%20passed-059669)](./frontend/tests)
+[![Backend Tests](https://img.shields.io/badge/Backend_Tests-81%20passed-059669)](./backend/tests)
+[![Frontend Tests](https://img.shields.io/badge/Frontend_Tests-36%20passed-059669)](./frontend/tests)
 
 ---
 
@@ -19,12 +20,12 @@
 | 功能模块 | 描述 |
 |---------|------|
 | 🗂 案例管理 | 创建、检索、搜索热度排序的信息案例 |
-| 📅 事件时间线 | 按时间轴展示案例内所有事件节点，支持时间范围过滤 |
+| 📅 事件时间线 | 按时间轴展示案例内所有事件节点，可信度颜色编码 |
 | 🔍 三维可信度评估 | 权威性 · 时效性 · 交叉验证，综合评分 0-100 |
-| 📡 数据源管理 | RSS/Atom/Scraper 采集源配置，支持 Cron 定时触发 |
-| 📰 内置媒体采集 | 8 个主流媒体源零配置自动采集，每 30 分钟更新 |
+| 📡 数据源管理 | RSS/JSON 采集源配置，支持 Cron 定时触发与单源手动采集 |
+| 📰 内置媒体采集 | 8 个国际中文媒体 RSS 源零配置自动采集，每 30 分钟更新 |
+| 🧠 智能事件归类 | jieba 实体提取 + sentence-transformers 语义匹配，双层自动归类 |
 | 🏷 标签分类 | 多维标签体系，案例交叉归类 |
-| 🔐 管理后台 | JWT 鉴权，管理员专属数据源管理面板 |
 
 ---
 
@@ -35,9 +36,11 @@
 - **SQLAlchemy** 2.0 (async) + **aiosqlite** — 异步 ORM，生产可切换 PostgreSQL
 - **Alembic** — 数据库版本迁移
 - **Pydantic v2** + **pydantic-settings** — 数据校验与配置管理
-- **python-jose** — JWT 令牌签发与验证
 - **APScheduler** — 数据源定时采集任务
-- **pytest** + **pytest-asyncio** — 单元测试与集成测试
+- **jieba** — 中文分词与实体提取（人名/地名/机构名）
+- **sentence-transformers** — 语义向量编码，余弦相似度事件归类
+- **feedparser** + **BeautifulSoup4** — RSS/HTML 内容解析
+- **pytest** + **pytest-asyncio** — 81 个后端测试用例
 
 ### 前端
 - **Vue 3.4** (Composition API + `<script setup>`)
@@ -45,8 +48,7 @@
 - **Vite 5** — 构建工具，内置 `/api` → 后端代理
 - **Naive UI 2.38** — 组件库
 - **Vue Router 4** — SPA 路由
-- **Axios** — HTTP 客户端，JWT 拦截器自动注入
-- **Day.js** — 时间格式化与相对时间
+- **Axios** — HTTP 客户端
 - **Vitest** + **@vue/test-utils** — 7 个测试文件，36 个测试用例全部通过
 
 ---
@@ -57,40 +59,45 @@
 AI-Codeing/
 ├── backend/                    # FastAPI 后端
 │   ├── app/
-│   │   ├── api/                # 路由层 (auth/cases/events/credibility/feeds/tags)
+│   │   ├── api/                # 路由层 (cases/events/credibility/feeds/tags)
 │   │   ├── models/             # SQLAlchemy ORM 模型
 │   │   ├── schemas/            # Pydantic 请求响应模式
 │   │   ├── services/           # 业务逻辑层
+│   │   │   ├── collector.py    # RSS 采集 + 双层 NLP 事件归类
+│   │   │   ├── entity_extractor.py  # jieba 实体提取 + Jaccard 重叠
+│   │   │   ├── nlp_matcher.py  # sentence-transformers 语义匹配
+│   │   │   ├── credibility.py  # 三维可信度评估引擎
+│   │   │   ├── builtin_feeds.py # 8 个内置 RSS 源定义
+│   │   │   └── ...
 │   │   ├── tasks/              # APScheduler 定时任务
 │   │   ├── config.py           # pydantic-settings 配置
 │   │   ├── database.py         # 异步数据库引擎
 │   │   └── main.py             # FastAPI 应用入口
 │   ├── alembic/                # 数据库迁移脚本
-│   ├── scripts/
-│   │   └── seed_data.py        # 种子数据（10 个真实案例）
-│   ├── tests/                  # 后端测试套件
-│   ├── .env                    # 环境变量（本地开发）
+│   ├── tests/                  # 后端测试套件 (81 个用例)
+│   │   ├── unit/               # 单元测试
+│   │   └── contract/           # API 契约测试
 │   └── requirements.txt
 │
 └── frontend/                   # Vue 3 前端
     ├── src/
-    │   ├── api/                # HTTP 模块 (cases/events/credibility/feeds/auth)
+    │   ├── api/                # HTTP 模块 (cases/events/credibility/feeds)
     │   ├── components/         # 通用组件
     │   │   ├── AppLayout.vue   # 全局导航布局
     │   │   ├── CaseCard.vue    # 案例卡片
     │   │   ├── CredibilityBadge.vue  # 可信度徽章
     │   │   ├── CredibilityPanel.vue  # 可信度详情面板
-    │   │   ├── EventCard.vue   # 事件卡片（含可信度警告）
-    │   │   ├── FeedStatusPanel.vue   # 数据源状态面板
+    │   │   ├── EventCard.vue   # 事件卡片（含来源图标 + 可信度颜色编码）
+    │   │   ├── FeedStatusPanel.vue   # 数据源状态面板（单源采集）
     │   │   ├── SearchBar.vue   # 搜索栏
     │   │   └── Timeline.vue    # 事件时间线
     │   ├── composables/
     │   │   └── useTimeline.ts  # 时间线状态管理 composable
     │   ├── pages/
-    │   │   ├── HomePage.vue        # 首页（Hero + 标签过滤 + 热度排行）
+    │   │   ├── HomePage.vue        # 首页（标签过滤 + 热度排行）
     │   │   ├── CaseDetailPage.vue  # 案例详情页 + 时间线 + 可信度抽屉
     │   │   ├── SearchResultPage.vue # 搜索结果页
-    │   │   └── AdminPage.vue       # 管理后台（登录 + 数据源管理）
+    │   │   └── AdminPage.vue       # 数据源管理面板
     │   ├── types/index.ts      # 所有 TypeScript 类型定义
     │   └── styles/main.css     # 全局样式 + CSS 变量
     └── tests/                  # Vitest 测试套件（36 个用例）
@@ -125,12 +132,12 @@ python -m venv .venv
 # 安装依赖
 pip install -r requirements.txt
 
+# 安装 NLP 依赖（jieba + sentence-transformers）
+pip install jieba sentence-transformers
+
 # 初始化数据库
 $env:PYTHONPATH = $PWD
 .venv\Scripts\alembic upgrade head
-
-# 写入种子数据（可选）
-.venv\Scripts\python scripts/seed_data.py
 
 # 启动开发服务器
 .venv\Scripts\uvicorn app.main:app --reload --port 8000
@@ -154,32 +161,21 @@ npm run dev
 
 ---
 
-## 🔑 默认账号
-
-| 角色 | 用户名 | 密码 |
-|------|--------|------|
-| 管理员 | `admin` | `changeme123` |
-
-> ⚠️ 仅用于本地开发，生产环境请修改 `backend/.env` 中的凭据和 `JWT_SECRET`。
-
----
-
 ## 🌐 API 端点
 
-| 方法 | 路径 | 描述 | 鉴权 |
-|------|------|------|------|
-| `POST` | `/api/v1/auth/login` | 获取 JWT 令牌 | — |
-| `GET` | `/api/v1/cases` | 案例列表（分页、排序、标签过滤） | — |
-| `POST` | `/api/v1/cases` | 创建案例 | ✅ |
-| `GET` | `/api/v1/cases/{id}` | 案例详情 | — |
-| `GET` | `/api/v1/cases/search?q=` | 全文搜索案例 | — |
-| `GET` | `/api/v1/cases/{id}/events` | 获取事件时间线 | — |
-| `POST` | `/api/v1/events` | 创建事件节点 | ✅ |
-| `GET` | `/api/v1/events/{id}/credibility` | 获取可信度评估 | — |
-| `GET` | `/api/v1/feeds` | 数据源列表 | ✅ |
-| `POST` | `/api/v1/feeds` | 创建数据源 | ✅ |
-| `POST` | `/api/v1/feeds/{id}/collect` | 手动触发采集 | ✅ |
-| `GET` | `/api/v1/tags` | 标签列表（含案例计数） | — |
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| `GET` | `/api/v1/cases` | 案例列表（分页、排序、标签过滤） |
+| `POST` | `/api/v1/cases` | 创建案例 |
+| `GET` | `/api/v1/cases/{id}` | 案例详情 |
+| `GET` | `/api/v1/cases/search?q=` | 全文搜索案例 |
+| `GET` | `/api/v1/cases/{id}/events` | 获取事件时间线 |
+| `POST` | `/api/v1/events` | 创建事件节点 |
+| `GET` | `/api/v1/events/{id}/credibility` | 获取可信度评估 |
+| `GET` | `/api/v1/feeds` | 数据源列表 |
+| `POST` | `/api/v1/feeds` | 创建数据源 |
+| `POST` | `/api/v1/feeds/{id}/collect` | 手动触发单源采集（同步等待完成） |
+| `GET` | `/api/v1/tags` | 标签列表（含案例计数） |
 
 完整文档见 `/docs`（Swagger UI）或 `/redoc`。
 
@@ -206,9 +202,9 @@ cases          ←→  case_tags  ←→  tags
 
 | 语义 | 颜色 | 用途 |
 |------|------|------|
-| Brand | `#4f46e5` 靛紫 | 主色调、焦点状态 |
+| Brand | `#ef4444` 红 | 主色调、强调元素 |
 | 高可信 | `#059669` 绿 | 可信度 High |
-| 中可信 | `#2563eb` 蓝 | 可信度 Medium |
+| 中可信 | `#7c3aed` 紫 | 可信度 Medium |
 | 低可信 | `#d97706` 橙 | 可信度 Low |
 | 未核实 | `#dc2626` 红 | 可信度 Unverified |
 
@@ -217,42 +213,43 @@ cases          ←→  case_tags  ←→  tags
 - 卡片：白色背景 + `border-radius: 10px` + 多层阴影，hover 上浮 2px
 - 状态色条：案例卡片左侧 4px 渐变竖条，直观标识案例状态
 - 时间线节点：彩色圆点 + 光晕，颜色对应可信度等级
+- 日期标签：彩色背景 + 白色文字，直观区分可信度
 - 可信度圆环：分数圆圈 + 彩色边框，三维进度条渐变填充
 
 ---
 
 ## 📰 内置媒体源
 
-系统预置 8 个主流中文媒体源，启动即自动采集，无需用户配置：
+系统预置 8 个国际中文媒体 RSS 源，启动即自动采集，无需用户配置：
 
 | 媒体 | 类型 | 采集间隔 |
 |------|------|---------|
-| 新浪新闻 | HTML Scraper | 30 分钟 |
-| 澎湃新闻 | HTML Scraper | 30 分钟 |
-| 环球时报 | HTML Scraper | 30 分钟 |
-| 央视新闻 | HTML Scraper | 30 分钟 |
 | BBC 中文 | RSS | 30 分钟 |
-| 联合早报 | HTML Scraper | 30 分钟 |
-| 新华网 | HTML Scraper | 30 分钟 |
-| 南方都市报 | HTML Scraper | 30 分钟 |
+| 德国之声中文 | RSS | 30 分钟 |
+| 法广 RFI 中文 | RSS | 30 分钟 |
+| 纽约时报中文 | RSS | 30 分钟 |
+| 韩联社中文 | RSS | 30 分钟 |
+| NHK 中文 | JSON | 30 分钟 |
+| 联合早报 | RSS | 30 分钟 |
+| CNA 中央通讯社 | RSS | 30 分钟 |
 
 - 内置源在首次启动时自动创建（幂等）
-- 管理员可禁用/启用内置源，但不可删除或修改核心字段
-- 采集的文章通过 NLP 语义相似度自动归类到对应案例时间线
+- 管理员可禁用/启用内置源，但不可删除
+- 采集的文章通过双层 NLP 自动归类：先 jieba 实体重叠匹配，再 sentence-transformers 语义相似度验证
 
 ---
 
 ## 🧪 运行测试
 
 ```powershell
-# 前端单元测试（36个）
+# 前端单元测试（36 个）
 cd frontend
 npx vitest run
 
 # TypeScript 类型检查
 npx vue-tsc --noEmit
 
-# 后端测试
+# 后端测试（81 个）
 cd backend
 $env:PYTHONPATH = $PWD
 .venv\Scripts\pytest tests/ -v
@@ -266,13 +263,10 @@ $env:PYTHONPATH = $PWD
 
 ```env
 DATABASE_URL=sqlite+aiosqlite:///./post_truth.db
-JWT_SECRET=<your-secret-key>
-JWT_ALGORITHM=HS256
-JWT_EXPIRE_MINUTES=60
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=changeme123
 CORS_ORIGINS=["http://localhost:5173"]
 LOG_LEVEL=INFO
+CASE_SIMILARITY_THRESHOLD=0.45
+CASE_ENTITY_OVERLAP_THRESHOLD=0.3
 ```
 
 生产环境切换 PostgreSQL：
@@ -284,10 +278,10 @@ DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/post_truth
 
 ## 📋 开发规范
 
-- **提交分支**：`001-case-timeline-verify`（Feature Branch）
 - **后端**：遵循 `app/api → app/services → app/models` 分层架构
 - **前端**：Composition API + `<script setup>`，所有类型在 `src/types/index.ts` 统一定义
 - **测试**：新增组件须在 `tests/components/` 补充测试用例
+- **NLP 配置**：通过 `CASE_SIMILARITY_THRESHOLD` 和 `CASE_ENTITY_OVERLAP_THRESHOLD` 调节事件归类灵敏度
 
 ---
 

@@ -1,25 +1,46 @@
+# === IDE / Editor ===
+.vscode/
+.idea/
+
+# === Speckit / AI tooling ===
 .github/
 .specify/
-.vscode/
+
+# === Specs (development planning docs) ===
 specs/
 
-# Python
-backend/.venv/
-**/__pycache__/
-**/*.pyc
-**/*.pyo
-*.db
-*.db-shm
-*.db-wal
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# === Python dev/test artifacts ===
+.coverage
+.pytest_cache/
+htmlcov/
+*.cover
+
+# === Backend runtime data ===
+backend/post_truth.db
 backend/.env
 
-# Frontend
-frontend/node_modules/
+# === Node / Frontend ===
+node_modules/
 frontend/dist/
-frontend/coverage/
-frontend/.env.local
 
-# Logs & misc
-*.log
+# === Frontend env (may contain API keys) ===
+frontend/.env
+
+# === OS files ===
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# === Logs ===
+*.log

@@ -35,12 +35,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { NTag, NButton } from 'naive-ui'
-import dayjs from 'dayjs'
+import { triggerCollect } from '@/api/feeds'
 import type { DataFeedOut } from '@/types'
 
 const props = defineProps<{ feed: DataFeedOut }>()
 const emit = defineEmits<{
-    (e: 'collect', id: string): void
+    (e: 'collected', id: string): void
     (e: 'edit', id: string): void
     (e: 'delete', id: string): void
 }>()
@@ -50,10 +50,10 @@ const collecting = ref(false)
 async function handleCollect() {
     collecting.value = true
     try {
-        emit('collect', props.feed.id)
+        await triggerCollect(props.feed.id)
+        emit('collected', props.feed.id)
     } finally {
-        // Parent handles async; reset after brief feedback
-        setTimeout(() => { collecting.value = false }, 500)
+        collecting.value = false
     }
 }
 
@@ -76,7 +76,12 @@ const statusTagType = computed(() => {
 })
 
 function formatTime(t: string) {
-    return dayjs(t).format('MM-DD HH:mm')
+    const d = new Date(t)
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mi = String(d.getMinutes()).padStart(2, '0')
+    return `${mm}-${dd} ${hh}:${mi}`
 }
 </script>
 
