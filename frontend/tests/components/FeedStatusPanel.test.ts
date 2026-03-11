@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import FeedStatusPanel from '@/components/FeedStatusPanel.vue'
 import type { DataFeedOut } from '@/types'
+
+vi.mock('@/api/feeds', () => ({
+    triggerCollect: vi.fn().mockResolvedValue({ feed_id: '1', message: 'ok', triggered_at: '' }),
+}))
 
 function makeFeed(overrides: Partial<DataFeedOut> = {}): DataFeedOut {
     return {
@@ -42,12 +46,13 @@ describe('FeedStatusPanel', () => {
         expect(wrapper.html()).toContain('offline')
     })
 
-    it('emits collect event when trigger button clicked', async () => {
+    it('emits collected event when trigger button clicked', async () => {
         const wrapper = mount(FeedStatusPanel, { props: { feed: makeFeed() } })
         const btn = wrapper.find('[data-testid="collect-btn"]')
         if (btn.exists()) {
             await btn.trigger('click')
-            expect(wrapper.emitted('collect')).toBeTruthy()
+            await flushPromises()
+            expect(wrapper.emitted('collected')).toBeTruthy()
         }
     })
 })

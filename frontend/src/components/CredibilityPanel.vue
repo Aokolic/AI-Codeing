@@ -71,11 +71,10 @@
 </template>
 
 <script setup lang="ts">
-import { h } from 'vue'
 import { NDataTable } from 'naive-ui'
 import CredibilityBadge from './CredibilityBadge.vue'
 import dayjs from 'dayjs'
-import type { CredibilityDetail, CredibilityLevel } from '@/types'
+import type { CredibilityDetail } from '@/types'
 
 defineProps<{ detail: CredibilityDetail }>()
 
@@ -86,21 +85,21 @@ function scoreClass(score: number) {
 }
 
 const sourceColumns = [
-    { title: '来源', key: 'name' },
+    { title: '来源', key: 'source_name' },
     { title: '类型', key: 'source_type', width: 72 },
     {
-        title: '可信度',
-        key: 'credibility_level',
+        title: '权威分',
+        key: 'authority_contribution',
         width: 82,
-        render: (row: { credibility_level: CredibilityLevel }) =>
-            h(CredibilityBadge, { level: row.credibility_level }),
+        render: (row: { authority_contribution: number }) =>
+            Math.round(row.authority_contribution),
     },
     {
-        title: '发布时间',
-        key: 'published_at',
+        title: '采集时间',
+        key: 'collected_at',
         width: 110,
-        render: (row: { published_at: string | null }) =>
-            row.published_at ? dayjs(row.published_at).format('MM-DD HH:mm') : '—'
+        render: (row: { collected_at: string | null }) =>
+            row.collected_at ? dayjs(row.collected_at).format('MM-DD HH:mm') : '—'
     },
 ]
 </script>

@@ -35,6 +35,8 @@ export async function deleteFeed(id: string): Promise<void> {
 }
 
 export async function triggerCollect(feedId: string): Promise<CollectTriggerResponse> {
-    const res = await apiClient.post<CollectTriggerResponse>(`/feeds/${feedId}/collect`)
+    const res = await apiClient.post<CollectTriggerResponse>(`/feeds/${feedId}/collect`, null, {
+        timeout: 120_000,
+    })
     return res.data
 }

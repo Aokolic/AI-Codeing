@@ -1,10 +1,10 @@
 """DataFeed Pydantic schemas."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.data_feed import FeedStatus, FeedType
 
@@ -22,6 +22,14 @@ class DataFeedOut(BaseModel):
     is_builtin: bool = False
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def _ensure_utc(self) -> "DataFeedOut":
+        for field in ("last_collected_at", "created_at"):
+            val = getattr(self, field)
+            if val is not None and val.tzinfo is None:
+                object.__setattr__(self, field, val.replace(tzinfo=timezone.utc))
+        return self
 
 
 class DataFeedCreate(BaseModel):

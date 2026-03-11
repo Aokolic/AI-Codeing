@@ -24,8 +24,28 @@ from app.models.data_feed import DataFeed, FeedStatus
 from app.models.event_node import EventNode
 from app.models.source import EventNodeSource, Source, SourceType
 from app.services.nlp_matcher import encode_text, find_matching_event
+from app.services.entity_extractor import extract_entities, entity_overlap
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+# In-memory caches to avoid redundant NLP calls within a collection run
+_embedding_cache: dict[str, list[float] | None] = {}
+_entity_cache: dict[str, set[str]] = {}
+
+
+def _cached_encode(text: str) -> list[float] | None:
+    """Encode text with in-memory cache to avoid repeated model calls."""
+    if text not in _embedding_cache:
+        _embedding_cache[text] = encode_text(text)
+    return _embedding_cache[text]
+
+
+def _cached_entities(text: str) -> set[str]:
+    """Extract entities with in-memory cache."""
+    if text not in _entity_cache:
+        _entity_cache[text] = extract_entities(text)
+    return _entity_cache[text]
 
 RETRY_DELAYS = [1, 2, 4]  # exponential backoff in seconds
 REQUEST_DELAY = 2.0  # polite crawl delay
@@ -92,13 +112,75 @@ def _parse_html(content: str, base_url: str, parse_config: dict | None) -> list[
     return articles
 
 
+def _parse_json_feed(content: str, feed_url: str) -> list[dict[str, Any]]:
+    """Parse JSON feed (e.g. NHK) and return list of article dicts."""
+    import json as _json
+
+    try:
+        data = _json.loads(content)
+    except (ValueError, TypeError):
+        return []
+
+    # Handle both top-level array and {"data": [...]} / {"channel": {"item": [...]}}
+    items: list = []
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        for key in ("data", "items", "news", "channel"):
+            candidate = data.get(key)
+            if isinstance(candidate, list):
+                items = candidate
+                break
+            if isinstance(candidate, dict):
+                nested = candidate.get("item", candidate.get("items", []))
+                if isinstance(nested, list):
+                    items = nested
+                    break
+
+    articles = []
+    for item in items[:30]:
+        if not isinstance(item, dict):
+            continue
+        title = item.get("title", item.get("headline", ""))
+        if not title:
+            continue
+        summary = item.get("summary", item.get("description", item.get("lead", "")))
+        url = item.get("url", item.get("link", feed_url))
+        # Parse date from various field names
+        date_str = item.get("updated", item.get("date", item.get("pubDate", "")))
+        pub = datetime.now(timezone.utc)
+        if date_str:
+            try:
+                from email.utils import parsedate_to_datetime
+                pub = parsedate_to_datetime(date_str)
+            except Exception:
+                try:
+                    pub = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                except Exception:
+                    pass
+        articles.append(
+            {
+                "title": str(title),
+                "summary": str(summary)[:500] if summary else "",
+                "url": str(url),
+                "event_time": pub,
+                "source_name": "NHK中文",
+            }
+        )
+    return articles
+
+
 def _detect_source_type(source_name: str, url: str) -> SourceType:
     """Heuristic source type detection based on name/URL."""
     name_lower = source_name.lower()
     url_lower = url.lower()
     if any(k in name_lower or k in url_lower for k in ["gov", "政府", "官方", "国务院"]):
         return SourceType.government
-    if any(k in name_lower or k in url_lower for k in ["新华", "人民", "央视", "xinhua", "cctv"]):
+    if any(k in name_lower or k in url_lower for k in [
+        "新华", "人民", "央视", "xinhua", "cctv",
+        "bbc", "dw", "rfi", "nyt", "nhk", "reuters", "yna", "cna", "zaobao",
+        "纽约时报", "德国之声", "法广", "韩联社", "联合早报", "中央通讯社",
+    ]):
         return SourceType.mainstream_media
     if any(k in name_lower or k in url_lower for k in ["学", "研究", "academic", "journal"]):
         return SourceType.academic
@@ -107,22 +189,21 @@ def _detect_source_type(source_name: str, url: str) -> SourceType:
     return SourceType.local_media
 
 
-CASE_SIMILARITY_THRESHOLD = 0.55  # lower than event dedup — topic-level grouping
-
-
 async def _classify_to_case(db: AsyncSession, title: str, summary: str) -> str:
     """Classify an article into an existing case or create a new one.
 
-    Uses NLP embedding of the article title+summary and compares against
-    all active case titles. If similarity >= CASE_SIMILARITY_THRESHOLD,
-    the article joins that case; otherwise a new case is created.
-    """
-    article_text = f"{title} {summary[:200]}"
-    article_embedding = encode_text(article_text)
+    Two-layer strategy:
+      Layer 1 — jieba entity overlap (lightweight, no model needed)
+      Layer 2 — semantic cosine similarity (sentence-transformers)
 
-    # If NLP model unavailable, create one case per article title
-    if article_embedding is None:
-        return await _create_case_from_article(db, title, summary)
+    Match if: (entity_overlap >= threshold AND cosine >= 0.35)
+              OR cosine >= case_similarity_threshold
+    Fallback: entity overlap alone when NLP model unavailable.
+    """
+    settings = get_settings()
+    article_text = f"{title} {summary[:200]}"
+    article_embedding = _cached_encode(article_text)
+    article_entities = _cached_entities(title)
 
     # Load all active cases
     stmt = select(Case).where(Case.status != CaseStatus.closed)
@@ -130,26 +211,42 @@ async def _classify_to_case(db: AsyncSession, title: str, summary: str) -> str:
     cases = result.scalars().all()
 
     best_case: Case | None = None
-    best_score = 0.0
+    best_combined_score = 0.0
 
     for case in cases:
-        # Encode case title for comparison
-        case_embedding = encode_text(case.title)
-        if case_embedding is None:
-            continue
-        score = _cosine_similarity(article_embedding, case_embedding)
+        case_entities = _cached_entities(case.title)
+        overlap = entity_overlap(article_entities, case_entities)
+
+        semantic_score = 0.0
+        if article_embedding is not None:
+            case_embedding = _cached_encode(case.title)
+            if case_embedding is not None:
+                semantic_score = _cosine_similarity(article_embedding, case_embedding)
+
+        # Two-layer decision
+        matched = False
+        if overlap >= settings.case_entity_overlap_threshold and semantic_score >= 0.35:
+            matched = True
+        elif semantic_score >= settings.case_similarity_threshold:
+            matched = True
+        elif article_embedding is None and overlap >= settings.case_entity_overlap_threshold:
+            # Fallback: entity overlap alone when NLP model unavailable
+            matched = True
+
+        combined = overlap + semantic_score  # for ranking best match
         logger.debug(
-            "Classification: '%s' vs case '%s' → score=%.3f (threshold=%.2f)",
-            title[:30], case.title[:30], score, CASE_SIMILARITY_THRESHOLD,
+            "Classification: '%s' vs case '%s' → overlap=%.3f, semantic=%.3f, matched=%s",
+            title[:30], case.title[:30], overlap, semantic_score, matched,
         )
-        if score >= CASE_SIMILARITY_THRESHOLD and score > best_score:
-            best_score = score
+
+        if matched and combined > best_combined_score:
+            best_combined_score = combined
             best_case = case
 
     if best_case is not None:
         logger.info(
-            "Article '%s' classified into case '%s' (score=%.3f)",
-            title[:40], best_case.title[:40], best_score,
+            "Article '%s' classified into case '%s' (combined=%.3f)",
+            title[:40], best_case.title[:40], best_combined_score,
         )
         return best_case.id
 
@@ -191,7 +288,10 @@ async def collect_feed(feed: DataFeed) -> bool:
         return False
 
     if feed.feed_type.value == "rss":
-        articles = _parse_rss(content, feed.url)
+        if feed.url.endswith(".json"):
+            articles = _parse_json_feed(content, feed.url)
+        else:
+            articles = _parse_rss(content, feed.url)
     else:
         articles = _parse_html(content, feed.url, feed.parse_config)
 
@@ -260,6 +360,8 @@ async def collect_feed(feed: DataFeed) -> bool:
 
         await db.commit()
         logger.info("Feed '%s': saved %d articles.", feed.name, len(articles))
+    _embedding_cache.clear()
+    _entity_cache.clear()
     return True
 
 

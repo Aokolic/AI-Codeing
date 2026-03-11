@@ -36,12 +36,6 @@
             <div class="detail-layout">
                 <!-- Timeline main column -->
                 <div class="detail-main">
-                    <!-- Time filter -->
-                    <div class="filter-bar">
-                        <n-date-picker v-model:value="dateRange" type="daterange" clearable placeholder="筛选时间范围"
-                            @update:value="handleDateFilter" />
-                    </div>
-
                     <!-- Timeline -->
                     <timeline :events="timelineState.events.value" :loading="timelineState.loading.value"
                         @event-click="handleEventClick" />
@@ -76,7 +70,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import {
-    NSkeleton, NResult, NButton, NDatePicker, NDrawer, NDrawerContent, NSpin,
+    NSkeleton, NResult, NButton, NDrawer, NDrawerContent, NSpin,
 } from 'naive-ui'
 import Timeline from '@/components/Timeline.vue'
 import CredibilityPanel from '@/components/CredibilityPanel.vue'
@@ -100,8 +94,6 @@ const error = ref<string | null>(null)
 const activeDay = ref('')
 
 const timelineState = useTimeline(caseId.value)
-
-const dateRange = ref<[number, number] | null>(null)
 
 const drawerVisible = ref(false)
 const credDetail = ref<CredibilityDetail | null>(null)
@@ -145,17 +137,6 @@ async function load() {
         error.value = e instanceof Error ? e.message : '加载失败'
     } finally {
         loading.value = false
-    }
-}
-
-function handleDateFilter(val: [number, number] | null) {
-    if (!val) {
-        timelineState.clearFilter()
-    } else {
-        timelineState.applyFilter({
-            from: new Date(val[0]).toISOString(),
-            to: new Date(val[1]).toISOString(),
-        })
     }
 }
 
@@ -307,11 +288,6 @@ onMounted(load)
     color: #ef4444;
     font-weight: 600;
     background: #fef2f2;
-}
-
-/* Filter bar */
-.filter-bar {
-    margin-bottom: 16px;
 }
 
 /* Drawer */

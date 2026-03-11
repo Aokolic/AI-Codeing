@@ -159,7 +159,7 @@ const showWarning = computed(() => {
 }
 
 .dot-medium {
-    background: #2563eb;
+    background: #7c3aed;
 }
 
 .dot-low {
@@ -185,29 +185,37 @@ const showWarning = computed(() => {
 }
 
 .date-badge {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
-    color: #ef4444;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #ef4444;
 }
 
 .date-badge.dot-high {
-    color: #059669;
+    background: #059669;
+    color: #fff;
 }
 
 .date-badge.dot-medium {
-    color: #2563eb;
+    background: #7c3aed;
+    color: #fff;
 }
 
 .date-badge.dot-low {
-    color: #f59e0b;
+    background: #f59e0b;
+    color: #fff;
 }
 
 .date-badge.dot-unverified {
-    color: #ef4444;
+    background: #ef4444;
+    color: #fff;
 }
 
 .date-badge.dot-default {
-    color: #ef4444;
+    background: #ef4444;
+    color: #fff;
 }
 
 .date-relative {

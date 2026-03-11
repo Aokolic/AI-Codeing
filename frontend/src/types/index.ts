@@ -121,9 +121,16 @@ export interface ScoringExplanation {
     cross_verify: string
 }
 
-export interface SourceWithCredibility extends SourceBrief {
+export interface SourceWithCredibility {
+    source_id: string
+    source_name: string
+    source_type: string
+    url: string
+    reputation_score: number
+    has_false_history: boolean
     authority_contribution: number
     is_accessible: boolean
+    collected_at: string
     warnings: string[]
 }
 
